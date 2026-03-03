@@ -27,7 +27,7 @@ CPU example:
 ```toml
 server_address = "pool.hacash.community:7001"
 reward_address = "YOUR_HAC_ADDRESS"
-worker_id = ""
+worker_name = ""
 mining_mode = "cpu"
 cpu_threads = 16
 ```
@@ -37,14 +37,15 @@ GPU/OpenCL example:
 ```toml
 server_address = "pool.hacash.community:7001"
 reward_address = "YOUR_HAC_WALLET_ADDRESS"
-worker_id = ""
+worker_name = ""
 mining_mode = "gpu"
 opencl_dir = "opencl"
-opencl_platform_id = 0
+opencl_platform_id = 0 # set to 1 if miner fails to start
 # opencl_device_id = 0  # optional; if omitted, worker uses all GPUs on the selected platform
-opencl_workgroups = 1024
-opencl_local_size = 256
-opencl_unit_size = 128
+gpu_effort_percent = 100
+# opencl_workgroups = 2048 # optional; for advanced users
+# opencl_local_size = 512 # optional; for advanced users
+# opencl_unit_size = 1024 # optional; for advanced users
 ```
 
 ### Start worker
@@ -92,10 +93,10 @@ The worker reads a `.ini` file using TOML syntax.
 
 - `reward_address`
   - What it does: destination address that receives your mining rewards.
-  - Example: `12zzCzDxEvNBuZRyGq2sqQKSGCYBJrAJHU`
+  - Example: `1HACPooLMf8q6EByvxrmn5tnnTS82p84ST`
   - Important: if this is invalid, worker startup fails.
 
-- `worker_id`
+- `worker_name`
   - What it does: label shown in pool UI/logs for this instance.
   - Example: `rig-01`, `farmA_gpu03`, or empty string `""`.
   - Tips: use unique IDs per rig for easier troubleshooting.
@@ -127,6 +128,7 @@ The worker reads a `.ini` file using TOML syntax.
 - `opencl_platform_id`
   - What it does: selects OpenCL platform (driver stack/vendor).
   - Typical value: `0`
+  - Tip: try `1` if miner fails to start.
   - Change only if your machine has multiple OpenCL platforms.
 
 - `opencl_device_id`
@@ -135,30 +137,41 @@ The worker reads a `.ini` file using TOML syntax.
   - If omitted: worker uses all GPUs found in the selected OpenCL platform.
   - Multi-GPU rigs:
     - Omit it to use all devices in one worker process.
-    - Or set explicit IDs (`0`, `1`, `2`, ...) and run one worker per GPU.
+    - Or set explicit IDs separated by comma (`0,1,2`) and run only selected GPUs.
+
+- `gpu_effort_percent`
+  - What it does: controls GPU load from `1` (lowest) to `100` (highest).
+  - Typical values: `80` to `100`.
+  - Recommended start: `100` for max performance, then reduce if heat/power is too high.
 
 - `opencl_workgroups`
-  - What it does: number of workgroups launched per kernel call.
-  - Typical values: `256`, `512`, `1024`, `2048`
-  - Recommended start: `1024`
+  - What it does: fixed workgroups. If set, this field is locked (not auto-tuned).
+  - Recommended value: `1024`.
+  - If omitted: auto-tuned from source defaults/candidates.
 
 - `opencl_local_size`
-  - What it does: local work size per workgroup.
-  - Typical values: `64`, `128`, `256`
-  - Recommended start: `256` (or `128` if unstable).
+  - What it does: fixed local work size. If set, this field is locked (not auto-tuned).
+  - Recommended value: `256`.
+  - Allowed values: `512`, `256`, `128`, `64`.
+  - If omitted: auto-tuned from source defaults/candidates.
 
 - `opencl_unit_size`
-  - What it does: extra batching factor controlling total work per dispatch.
-  - Typical values: `64`, `128`, `256`, `512`
-  - Recommended start: `128`
+  - What it does: fixed batching unit. If set, this field is locked (not auto-tuned).
+  - Recommended value: `256`
+  - If omitted: auto-tuned from source defaults/candidates.
+
 
 ### GPU tuning strategy (safe order)
 
 1. Keep `opencl_platform_id` and `opencl_device_id` correct first.
-2. Start from defaults: `workgroups=1024`, `local_size=256`, `unit_size=128`.
-3. If unstable: reduce `local_size` to `128`, then reduce `workgroups`.
-4. If stable and underperforming: increase `workgroups` gradually.
-5. Change one field at a time and compare hashrate for a few minutes.
+2. The worker auto-tunes on startup (GPU mode):
+   - Stage 1: finds stable `local_size`.
+   - Stage 2: benchmarks `workgroups`.
+   - Stage 3: benchmarks `unit_size`.
+3. If you set any `opencl_*` field, that specific field is locked and skipped by auto-tune.
+4. Auto-tune benchmarks currently run with `3` rounds per candidate.
+5. The selected max stable params are treated as `100%` effort.
+6. Final params are scaled by `gpu_effort_percent` and clamped to multiples of 16.
 
 ### Minimal templates
 
@@ -167,7 +180,7 @@ CPU (stable default):
 ```toml
 server_address = "pool.hacash.community:7001"
 reward_address = "YOUR_HAC_ADDRESS"
-worker_id = "cpu-rig-01"
+worker_name = "cpu-rig-01"
 mining_mode = "cpu"
 cpu_threads = 8
 ```
@@ -177,17 +190,18 @@ GPU (stable default):
 ```toml
 server_address = "pool.hacash.community:7001"
 reward_address = "YOUR_HAC_ADDRESS"
-worker_id = "gpu-rig-01"
+worker_name = "gpu-rig-01"
 mining_mode = "gpu"
 opencl_dir = "opencl"
-opencl_platform_id = 0
+opencl_platform_id = 0 # set to 1 if miner fails to start
 # opencl_device_id = 0  # optional; omit to use all GPUs
-opencl_workgroups = 1024
-opencl_local_size = 256
-opencl_unit_size = 128
+opencl_workgroups = 2048
+opencl_local_size = 512
+opencl_unit_size = 1024
+gpu_effort_percent = 100
 ```
 
-### `worker_id` rules
+### `worker_name` rules
 
 - Max length: 20 characters.
 - You can use uppercase/lowercase letters, numbers, and only these symbols: `@`, `.`, `_`, `-`.
@@ -209,7 +223,7 @@ opencl_unit_size = 128
 
 - Verify `server_address`.
 - Verify firewall/NAT rules.
-- Verify your `reward_address` and `worker_id` are valid.
+- Verify your `reward_address` and `worker_name` are valid.
 
 ### Why are shares rejected?
 
