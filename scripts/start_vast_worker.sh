@@ -58,7 +58,17 @@ echo "Downloading: $HACPOOL_WORKER_URL"
 curl -fL "$HACPOOL_WORKER_URL" -o "$ZIP_PATH"
 
 rm -rf "$APP_DIR"/*
+set +e
 unzip -o "$ZIP_PATH" -d "$APP_DIR"
+UNZIP_RC=$?
+set -e
+if [[ "$UNZIP_RC" -gt 1 ]]; then
+  echo "[bootstrap] ERROR: unzip failed with code $UNZIP_RC"
+  exit "$UNZIP_RC"
+fi
+if [[ "$UNZIP_RC" -eq 1 ]]; then
+  echo "[bootstrap] unzip completed with warnings (code 1); continuing"
+fi
 [[ -f "$APP_DIR/HACPool-worker" ]] || { echo "[bootstrap] ERROR: binary not found after unzip"; exit 1; }
 chmod +x "$APP_DIR/HACPool-worker"
 echo "[bootstrap] Package extracted to: $APP_DIR"
