@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+BOOTSTRAP_LOG_DIR="/workspace/HACPool-worker"
+BOOTSTRAP_LOG_PATH="${BOOTSTRAP_LOG_DIR}/bootstrap.log"
+mkdir -p "${BOOTSTRAP_LOG_DIR}"
+exec > >(tee -a "${BOOTSTRAP_LOG_PATH}") 2>&1
+
+if [[ "${DEBUG_BOOTSTRAP:-0}" == "1" ]]; then
+  set -x
+fi
+
+trap 'echo "[bootstrap] ERROR on line $LINENO"' ERR
+
+echo "[bootstrap] Starting HACPool Vast bootstrap..."
+echo "[bootstrap] Log file: ${BOOTSTRAP_LOG_PATH}"
+
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends curl unzip ca-certificates ocl-icd-opencl-dev
@@ -46,6 +60,7 @@ curl -fL "$HACPOOL_WORKER_URL" -o "$ZIP_PATH"
 rm -rf "$APP_DIR"/*
 unzip -o "$ZIP_PATH" -d "$APP_DIR"
 chmod +x "$APP_DIR/HACPool-worker" || true
+echo "[bootstrap] Package extracted to: $APP_DIR"
 
 cat > "$APP_DIR/HACPool-worker.ini" <<EOF
 server_address = "${SERVER_ADDRESS}"
@@ -75,6 +90,12 @@ pkill -f "/workspace/HACPool-worker/HACPool-worker" || true
 cd "$APP_DIR"
 nohup ./HACPool-worker --config HACPool-worker.ini > "$LOG_PATH" 2>&1 &
 sleep 1
-echo "Worker started. Log: $LOG_PATH"
-tail -n 30 "$LOG_PATH" || true
-
+if pgrep -f "/workspace/HACPool-worker/HACPool-worker" >/dev/null 2>&1; then
+  echo "[bootstrap] Worker started. Worker log: $LOG_PATH"
+  tail -n 30 "$LOG_PATH" || true
+else
+  echo "[bootstrap] ERROR: worker process did not stay running."
+  echo "[bootstrap] Showing worker log tail:"
+  tail -n 80 "$LOG_PATH" || true
+  exit 1
+fi
