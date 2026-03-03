@@ -147,18 +147,18 @@ The worker reads a `.ini` file using TOML syntax.
 - `opencl_workgroups`
   - What it does: fixed workgroups. If set, this field is locked (not auto-tuned).
   - Recommended value: `1024`.
-  - If omitted: auto-tuned from source defaults/candidates.
+  - If omitted: value is auto-tuned.
 
 - `opencl_local_size`
   - What it does: fixed local work size. If set, this field is locked (not auto-tuned).
   - Recommended value: `256`.
   - Allowed values: `512`, `256`, `128`, `64`.
-  - If omitted: auto-tuned from source defaults/candidates.
+  - If omitted: value is auto-tuned.
 
 - `opencl_unit_size`
   - What it does: fixed batching unit. If set, this field is locked (not auto-tuned).
   - Recommended value: `256`
-  - If omitted: auto-tuned from source defaults/candidates.
+  - If omitted: value is auto-tuned.
 
 
 ### GPU tuning strategy (safe order)
@@ -180,24 +180,21 @@ CPU (stable default):
 ```toml
 server_address = "pool.hacash.community:7001"
 reward_address = "YOUR_HAC_ADDRESS"
-worker_name = "cpu-rig-01"
+worker_name = ""
 mining_mode = "cpu"
 cpu_threads = 8
 ```
 
-GPU (stable default):
+GPU (stable default, auto-tuned):
 
 ```toml
 server_address = "pool.hacash.community:7001"
 reward_address = "YOUR_HAC_ADDRESS"
-worker_name = "gpu-rig-01"
+worker_name = ""
 mining_mode = "gpu"
 opencl_dir = "opencl"
 opencl_platform_id = 0 # set to 1 if miner fails to start
 # opencl_device_id = 0  # optional; omit to use all GPUs
-opencl_workgroups = 2048
-opencl_local_size = 512
-opencl_unit_size = 1024
 gpu_effort_percent = 100
 ```
 
