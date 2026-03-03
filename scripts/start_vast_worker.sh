@@ -59,7 +59,8 @@ curl -fL "$HACPOOL_WORKER_URL" -o "$ZIP_PATH"
 
 rm -rf "$APP_DIR"/*
 unzip -o "$ZIP_PATH" -d "$APP_DIR"
-chmod +x "$APP_DIR/HACPool-worker" || true
+[[ -f "$APP_DIR/HACPool-worker" ]] || { echo "[bootstrap] ERROR: binary not found after unzip"; exit 1; }
+chmod +x "$APP_DIR/HACPool-worker"
 echo "[bootstrap] Package extracted to: $APP_DIR"
 
 cat > "$APP_DIR/HACPool-worker.ini" <<EOF
@@ -84,6 +85,12 @@ EOF
     echo "opencl_device_id = ${OPENCL_DEVICE_ID}" >> "$APP_DIR/HACPool-worker.ini"
   fi
 fi
+
+grep -q "reward_address = \"${REWARD_ADDRESS}\"" "$APP_DIR/HACPool-worker.ini" || {
+  echo "[bootstrap] ERROR: generated ini does not contain REWARD_ADDRESS"
+  sed -n '1,60p' "$APP_DIR/HACPool-worker.ini" || true
+  exit 1
+}
 
 pkill -f "/workspace/HACPool-worker/HACPool-worker" || true
 
