@@ -228,3 +228,8 @@ gpu_effort_percent = 100
 - High network latency.
 - Invalid worker settings.
 - Address mismatch with pool policy.
+
+## 4) Deployment Guides
+
+- HiveOS: [README-hiveos.md](./README-hiveos.md)
+- Vast.ai: [README-vastai.md](./README-vastai.md)
