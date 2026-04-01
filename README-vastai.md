@@ -8,12 +8,12 @@ Script:
 What it does:
 1. Installs minimal runtime packages.
 2. Downloads the latest Ubuntu worker ZIP from GitHub Releases (or a fixed URL).
-3. Extracts files and generates `HACPool-worker.ini`.
-4. Starts worker in background and writes logs.
+3. Extracts files and starts `HACPool-worker` with command-line arguments.
+4. Writes worker logs in background.
 
 ## Template Description
 
-`HACPool worker auto-bootstrap (download latest release, generate config, auto-start)`
+`HACPool worker auto-bootstrap (download latest release, CLI args, auto-start)`
 
 ## Recommended Base Image
 
@@ -29,18 +29,15 @@ curl -fsSL https://raw.githubusercontent.com/HacashCommunity/HACPool/refs/heads/
 
 ## Required Variables
 
-- `SERVER_ADDRESS` = `pool.hacash.community:7001`
+- `SERVER_ADDRESS` = `pool.hacash.community:3333`
 - `REWARD_ADDRESS` = `YOUR_HAC_ADDRESS`
 
 ## Optional Variables
 
 - `WORKER_NAME` (default: empty)
-- `MINING_MODE` (`gpu` default, or `cpu`)
-- `CPU_THREADS` (CPU mode only)
-- `GPU_EFFORT_PERCENT` (`1..100`, default `100`)
-- `OPENCL_PLATFORM_ID` (default `0`)
-- `OPENCL_DEVICE_ID` (optional)
-- `OPENCL_DIR` (default `opencl`)
+- `EFFORT` (optional; if set, must be `1..100`)
+- `DEVICES` (optional)
+- `WORKER_EXTRA_ARGS` (optional; extra `HACPool-worker` flags)
 - `HACPOOL_WORKER_URL` (optional fixed release ZIP URL)
 
 ## Logs

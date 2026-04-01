@@ -17,18 +17,21 @@ echo "[bootstrap] Log file: ${BOOTSTRAP_LOG_PATH}"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends curl unzip ca-certificates ocl-icd-opencl-dev
+apt-get install -y --no-install-recommends curl unzip ca-certificates
 
-: "${SERVER_ADDRESS:?Missing SERVER_ADDRESS (example: pool.hacash.community:7001)}"
+: "${SERVER_ADDRESS:?Missing SERVER_ADDRESS (example: pool.hacash.community:3333)}"
 : "${REWARD_ADDRESS:?Missing REWARD_ADDRESS}"
 
 WORKER_NAME="${WORKER_NAME:-}"
-MINING_MODE="${MINING_MODE:-gpu}"          # gpu | cpu
-CPU_THREADS="${CPU_THREADS:-$(nproc)}"     # used when MINING_MODE=cpu
-GPU_EFFORT_PERCENT="${GPU_EFFORT_PERCENT:-100}"
-OPENCL_DIR="${OPENCL_DIR:-opencl}"
-OPENCL_PLATFORM_ID="${OPENCL_PLATFORM_ID:-0}"
-OPENCL_DEVICE_ID="${OPENCL_DEVICE_ID:-}"   # empty = all GPUs
+DEVICES="${DEVICES:-}"   # empty = all GPUs
+EFFORT="${EFFORT:-}"     # optional; if set must be 1..100
+WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS:-}"
+
+# Validate optional effort only when provided
+if [[ -n "${EFFORT}" ]]; then
+  [[ "${EFFORT}" =~ ^[0-9]+$ ]] || { echo "[bootstrap] ERROR: EFFORT must be an integer 1..100"; exit 1; }
+  (( EFFORT >= 1 && EFFORT <= 100 )) || { echo "[bootstrap] ERROR: EFFORT out of range (1..100)"; exit 1; }
+fi
 
 # Optional fixed release URL:
 # HACPOOL_WORKER_URL="https://github.com/HacashCommunity/HACPool/releases/download/v0.1.0/HACPool-worker-ubuntu-v0.1.0.zip"
@@ -69,45 +72,41 @@ fi
 if [[ "$UNZIP_RC" -eq 1 ]]; then
   echo "[bootstrap] unzip completed with warnings (code 1); continuing"
 fi
-[[ -f "$APP_DIR/HACPool-worker" ]] || { echo "[bootstrap] ERROR: binary not found after unzip"; exit 1; }
-chmod +x "$APP_DIR/HACPool-worker"
+WORKER_BIN="$APP_DIR/HACPool-worker"
+[[ -f "$WORKER_BIN" ]] || { echo "[bootstrap] ERROR: miner binary not found after unzip (expected $WORKER_BIN)"; exit 1; }
+chmod +x "$WORKER_BIN"
+WORKER_BIN_NAME="$(basename "$WORKER_BIN")"
 echo "[bootstrap] Package extracted to: $APP_DIR"
 
-cat > "$APP_DIR/HACPool-worker.ini" <<EOF
-server_address = "${SERVER_ADDRESS}"
-reward_address = "${REWARD_ADDRESS}"
-worker_name = "${WORKER_NAME}"
-
-mining_mode = "${MINING_MODE}"
-EOF
-
-if [[ "$MINING_MODE" == "cpu" ]]; then
-  cat >> "$APP_DIR/HACPool-worker.ini" <<EOF
-cpu_threads = ${CPU_THREADS}
-EOF
-else
-  cat >> "$APP_DIR/HACPool-worker.ini" <<EOF
-opencl_dir = "${OPENCL_DIR}"
-opencl_platform_id = ${OPENCL_PLATFORM_ID}
-gpu_effort_percent = ${GPU_EFFORT_PERCENT}
-EOF
-  if [[ -n "$OPENCL_DEVICE_ID" ]]; then
-    echo "opencl_device_id = ${OPENCL_DEVICE_ID}" >> "$APP_DIR/HACPool-worker.ini"
-  fi
-fi
-
-grep -q "reward_address = \"${REWARD_ADDRESS}\"" "$APP_DIR/HACPool-worker.ini" || {
-  echo "[bootstrap] ERROR: generated ini does not contain REWARD_ADDRESS"
-  sed -n '1,60p' "$APP_DIR/HACPool-worker.ini" || true
-  exit 1
-}
-
-pkill -f "/workspace/HACPool-worker/HACPool-worker" || true
+pkill -f "/${WORKER_BIN_NAME}" || true
 
 cd "$APP_DIR"
-nohup ./HACPool-worker --config HACPool-worker.ini > "$LOG_PATH" 2>&1 &
+pool_url="${SERVER_ADDRESS}"
+if [[ "${pool_url}" != *"://"* ]]; then
+  pool_url="stratum+tcp://${pool_url}"
+fi
+
+worker_user="${REWARD_ADDRESS}"
+if [[ -n "${WORKER_NAME}" ]]; then
+  worker_user="${REWARD_ADDRESS}.${WORKER_NAME}"
+fi
+
+worker_cmd=("${WORKER_BIN}" -o "${pool_url}" -u "${worker_user}")
+if [[ -n "${EFFORT}" ]]; then
+  worker_cmd+=(--effort "${EFFORT}")
+fi
+if [[ -n "${DEVICES}" ]]; then
+  worker_cmd+=(--devices "${DEVICES}")
+fi
+if [[ -n "${WORKER_EXTRA_ARGS}" ]]; then
+  # shellcheck disable=SC2206
+  extra_args=( ${WORKER_EXTRA_ARGS} )
+  worker_cmd+=("${extra_args[@]}")
+fi
+
+nohup "${worker_cmd[@]}" > "$LOG_PATH" 2>&1 &
 sleep 1
-if pgrep -f "/workspace/HACPool-worker/HACPool-worker" >/dev/null 2>&1; then
+if pgrep -f "/${WORKER_BIN_NAME}" >/dev/null 2>&1; then
   echo "[bootstrap] Worker started. Worker log: $LOG_PATH"
   tail -n 30 "$LOG_PATH" || true
 else
